@@ -1,6 +1,6 @@
 # lz4 for DOS/djgpp
 This file details on how to compile lz4.exe, and liblz4.a for use on DOS/djgpp using
-Andrew Wu's build-djgpp cross compilers ([GH][0], [Binaries][1]) on OSX, Linux.
+ build-djgpp cross compilers ([GH][0], [Binaries][1]) on OSX, Linux.
 
 ## Setup
 * Download a djgpp tarball [binaries][1] for your platform.  
