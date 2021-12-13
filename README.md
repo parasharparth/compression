@@ -1,137 +1,71 @@
-LZ4 - Library Files
-================================
+Programs and scripts for automated testing of LZ4
+=======================================================
 
-The `/lib` directory contains many files, but depending on project's objectives,
-not all of them are necessary.
-
-#### Minimal LZ4 build
-
-The minimum required is **`lz4.c`** and **`lz4.h`**,
-which provides the fast compression and decompression algorithms.
-They generate and decode data using the [LZ4 block format].
-
-
-#### High Compression variant
-
-For more compression ratio at the cost of compression speed,
-the High Compression variant called **lz4hc** is available.
-Add files **`lz4hc.c`** and **`lz4hc.h`**.
-This variant also compresses data using the [LZ4 block format],
-and depends on regular `lib/lz4.*` source files.
+This directory contains the following programs and scripts:
+- `datagen` : Synthetic and parametrable data generator, for tests
+- `frametest` : Test tool that checks lz4frame integrity on target platform
+- `fullbench`  : Precisely measure speed for each lz4 inner functions
+- `fuzzer`  : Test tool, to check lz4 integrity on target platform
+- `test-lz4-speed.py` : script for testing lz4 speed difference between commits
+- `test-lz4-versions.py` : compatibility test between lz4 versions stored on Github
 
 
-#### Frame support, for interoperability
+#### `test-lz4-versions.py` - script for testing lz4 interoperability between versions
 
-In order to produce compressed data compatible with `lz4` command line utility,
-it's necessary to use the [official interoperable frame format].
-This format is generated and decoded automatically by the **lz4frame** library.
-Its public API is described in `lib/lz4frame.h`.
-In order to work properly, lz4frame needs all other modules present in `/lib`,
-including, lz4 and lz4hc, and also **xxhash**.
-So it's necessary to include all `*.c` and `*.h` files present in `/lib`.
+This script creates `versionsTest` directory to which lz4 repository is cloned.
+Then all tagged (released) versions of lz4 are compiled.
+In the following step interoperability between lz4 versions is checked.
 
 
-#### Advanced / Experimental API
+#### `test-lz4-speed.py` - script for testing lz4 speed difference between commits
 
-Definitions which are not guaranteed to remain stable in future versions,
-are protected behind macros, such as `LZ4_STATIC_LINKING_ONLY`.
-As the name strongly implies, these definitions should only be invoked
-in the context of static linking ***only***.
-Otherwise, dependent application may fail on API or ABI break in the future.
-The associated symbols are also not exposed by the dynamic library by default.
-Should they be nonetheless needed, it's possible to force their publication
-by using build macros `LZ4_PUBLISH_STATIC_FUNCTIONS`
-and `LZ4F_PUBLISH_STATIC_FUNCTIONS`.
+This script creates `speedTest` directory to which lz4 repository is cloned.
+Then it compiles all branches of lz4 and performs a speed benchmark for a given list of files (the `testFileNames` parameter).
+After `sleepTime` (an optional parameter, default 300 seconds) seconds the script checks repository for new commits.
+If a new commit is found it is compiled and a speed benchmark for this commit is performed.
+The results of the speed benchmark are compared to the previous results.
+If compression or decompression speed for one of lz4 levels is lower than `lowerLimit` (an optional parameter, default 0.98) the speed benchmark is restarted.
+If second results are also lower than `lowerLimit` the warning e-mail is send to recipients from the list (the `emails` parameter).
 
-
-#### Build macros
-
-The following build macro can be selected to adjust source code behavior at compilation time :
-
-- `LZ4_FAST_DEC_LOOP` : this triggers a speed optimized decompression loop, more powerful on modern cpus.
-  This loop works great on `x86`, `x64` and `aarch64` cpus, and is automatically enabled for them.
-  It's also possible to enable or disable it manually, by passing `LZ4_FAST_DEC_LOOP=1` or `0` to the preprocessor.
-  For example, with `gcc` : `-DLZ4_FAST_DEC_LOOP=1`,
-  and with `make` : `CPPFLAGS+=-DLZ4_FAST_DEC_LOOP=1 make lz4`.
-
-- `LZ4_DISTANCE_MAX` : control the maximum offset that the compressor will allow.
-  Set to 65535 by default, which is the maximum value supported by lz4 format.
-  Reducing maximum distance will reduce opportunities for LZ4 to find matches,
-  hence will produce a worse compression ratio.
-  However, a smaller max distance can allow compatibility with specific decoders using limited memory budget.
-  This build macro only influences the compressed output of the compressor.
-
-- `LZ4_DISABLE_DEPRECATE_WARNINGS` : invoking a deprecated function will make the compiler generate a warning.
-  This is meant to invite users to update their source code.
-  Should this be a problem, it's generally possible to make the compiler ignore these warnings,
-  for example with `-Wno-deprecated-declarations` on `gcc`,
-  or `_CRT_SECURE_NO_WARNINGS` for Visual Studio.
-  This build macro offers another project-specific method
-  by defining `LZ4_DISABLE_DEPRECATE_WARNINGS` before including the LZ4 header files.
-
-- `LZ4_USER_MEMORY_FUNCTIONS` : replace calls to <stdlib>'s `malloc`, `calloc` and `free`
-  by user-defined functions, which must be called `LZ4_malloc()`, `LZ4_calloc()` and `LZ4_free()`.
-  User functions must be available at link time.
-
-- `LZ4_FORCE_SW_BITCOUNT` : by default, the compression algorithm tries to determine lengths
-  by using bitcount instructions, generally implemented as fast single instructions in many cpus.
-  In case the target cpus doesn't support it, or compiler intrinsic doesn't work, or feature bad performance,
-  it's possible to use an optimized software path instead.
-  This is achieved by setting this build macros .
-  In most cases, it's not expected to be necessary,
-  but it can be legitimately considered for less common platforms.
-
-- `LZ4_ALIGN_TEST` : alignment test ensures that the memory area
-  passed as argument to become a compression state is suitably aligned.
-  This test can be disabled if it proves flaky, by setting this value to 0.
+Additional remarks:
+- To be sure that speed results are accurate the script should be run on a "stable" target system with no other jobs running in parallel
+- Using the script with virtual machines can lead to large variations of speed results
+- The speed benchmark is not performed until computers' load average is lower than `maxLoadAvg` (an optional parameter, default 0.75)
+- The script sends e-mails using `mutt`; if `mutt` is not available it sends e-mails without attachments using `mail`; if both are not available it only prints a warning
 
 
-#### Amalgamation
-
-lz4 source code can be amalgamated into a single file.
-One can combine all source code into `lz4_all.c` by using following command:
+The example usage with two test files, one e-mail address, and with an additional message:
 ```
-cat lz4.c lz4hc.c lz4frame.c > lz4_all.c
+./test-lz4-speed.py "silesia.tar calgary.tar" "email@gmail.com" --message "tested on my laptop" --sleepTime 60
 ```
-(`cat` file order is important) then compile `lz4_all.c`.
-All `*.h` files present in `/lib` remain necessary to compile `lz4_all.c`.
 
-
-#### Windows : using MinGW+MSYS to create DLL
-
-DLL can be created using MinGW+MSYS with the `make liblz4` command.
-This command creates `dll\liblz4.dll` and the import library `dll\liblz4.lib`.
-To override the `dlltool` command when cross-compiling on Linux, just set the `DLLTOOL` variable. Example of cross compilation on Linux with mingw-w64 64 bits:
+To run the script in background please use:
 ```
-make BUILD_STATIC=no CC=x86_64-w64-mingw32-gcc DLLTOOL=x86_64-w64-mingw32-dlltool OS=Windows_NT
+nohup ./test-lz4-speed.py testFileNames emails &
 ```
-The import library is only required with Visual C++.
-The header files `lz4.h`, `lz4hc.h`, `lz4frame.h` and the dynamic library
-`dll\liblz4.dll` are required to compile a project using gcc/MinGW.
-The dynamic library has to be added to linking options.
-It means that if a project that uses LZ4 consists of a single `test-dll.c`
-file it should be linked with `dll\liblz4.dll`. For example:
+
+The full list of parameters:
 ```
-    $(CC) $(CFLAGS) -Iinclude/ test-dll.c -o test-dll dll\liblz4.dll
+positional arguments:
+  testFileNames         file names list for speed benchmark
+  emails                list of e-mail addresses to send warnings
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --message MESSAGE     attach an additional message to e-mail
+  --lowerLimit LOWERLIMIT
+                        send email if speed is lower than given limit
+  --maxLoadAvg MAXLOADAVG
+                        maximum load average to start testing
+  --lastCLevel LASTCLEVEL
+                        last compression level for testing
+  --sleepTime SLEEPTIME
+                        frequency of repository checking in seconds
 ```
-The compiled executable will require LZ4 DLL which is available at `dll\liblz4.dll`.
-
-
-#### Miscellaneous
-
-Other files present in the directory are not source code. They are :
-
- - `LICENSE` : contains the BSD license text
- - `Makefile` : `make` script to compile and install lz4 library (static and dynamic)
- - `liblz4.pc.in` : for `pkg-config` (used in `make install`)
- - `README.md` : this file
-
-[official interoperable frame format]: ../doc/lz4_Frame_format.md
-[LZ4 block format]: ../doc/lz4_Block_format.md
 
 
 #### License
 
-All source material within __lib__ directory are BSD 2-Clause licensed.
-See [LICENSE](LICENSE) for details.
-The license is also reminded at the top of each source file.
+All files in this directory are licensed under GPL-v2.
+See [COPYING](COPYING) for details.
+The text of the license is also included at the top of each source file.
